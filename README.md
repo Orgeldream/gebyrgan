@@ -12,4 +12,6 @@ Output length: 470400 samples
 
 Format: 16-bit · 44.1k · MONO WAV
 
+180BPM
+
 You need 16 of them named Break1.wav to Break16.wav
