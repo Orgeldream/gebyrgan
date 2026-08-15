@@ -1,0 +1,978 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GEBYRGAN - for BRECAN Mk2</title>
+    <meta name="description" content="Drop audio files, get 16 loopable 16-bit 44.1kHz WAVs.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;600&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --bg: #000;
+            --card: #111;
+            --border: #222;
+            --text: #fff;
+            --muted: #666;
+            --dim: #444;
+            --font: 'Outfit', -apple-system, sans-serif;
+            --mono: 'Menlo', 'Monaco', 'Courier New', monospace;
+        }
+
+        body {
+            font-family: var(--font);
+            background: var(--bg);
+            color: var(--text);
+            padding: 30px 20px 60px;
+            min-height: 100vh;
+        }
+
+        .container { max-width: 860px; margin: 0 auto; }
+
+        /* Header */
+        .header { display: flex; align-items: baseline; gap: 16px; margin-bottom: 28px; }
+        .title { font-size: 30px; font-weight: 600; letter-spacing: 5px; text-transform: uppercase; }
+        .subtitle { font-size: 13px; color: var(--muted); letter-spacing: 1px; font-weight: 300; }
+
+        /* Cards */
+        .card { background: var(--card); border-radius: 14px; padding: 20px; margin-bottom: 12px; }
+        .card-row { display: flex; gap: 12px; align-items: stretch; }
+        .card-row .card { margin-bottom: 12px; }
+        .card-row .card:first-child { flex: 0 0 160px; }
+        .card-row .card:last-child { flex: 1 1 auto; min-width: 0; }
+        @media (max-width: 600px) { .card-row { flex-direction: column; } .card-row .card:first-child { flex: 1 1 auto; } }
+        .card-title {
+            font-size: 11px; font-weight: 600; color: var(--muted);
+            letter-spacing: 2px; text-transform: uppercase; margin-bottom: 12px;
+        }
+
+        /* Drop zone */
+        .drop-zone {
+            border: 1px dashed #333; border-radius: 10px; padding: 36px 20px;
+            text-align: center; cursor: pointer; transition: border-color 0.2s, background 0.2s;
+            position: relative;
+        }
+        .drop-zone.drag-over { border-color: #888; background: #1a1a1a; }
+        .drop-zone input[type="file"] {
+            position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
+        }
+        .drop-icon { font-size: 32px; margin-bottom: 10px; opacity: 0.4; }
+        .drop-label { font-size: 14px; color: var(--muted); font-weight: 300; }
+        .drop-label strong { color: var(--text); font-weight: 600; }
+
+        /* File list */
+        .file-list { margin-top: 14px; display: flex; flex-direction: column; gap: 6px; }
+        .file-item {
+            display: flex; align-items: center; gap: 10px;
+            background: #1a1a1a; border-radius: 8px; padding: 8px 12px; font-size: 13px;
+        }
+        .file-item .file-name { flex: 1; color: #ccc; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .file-item .file-size { color: var(--muted); font-size: 12px; white-space: nowrap; }
+        .file-item .remove-btn {
+            background: none; border: none; color: #444; cursor: pointer;
+            font-size: 16px; padding: 0 2px; line-height: 1; transition: color 0.2s;
+        }
+        .file-item .remove-btn:hover { color: #fff; }
+
+        /* Settings */
+        .settings-grid { display: grid; grid-template-columns: 1fr; max-width: 220px; gap: 12px; }
+
+        .setting-group label {
+            display: block; font-size: 11px; font-weight: 600; color: var(--muted);
+            letter-spacing: 2px; text-transform: uppercase; margin-bottom: 8px;
+        }
+        .number-input {
+            width: 100%; background: #252525; border: none; border-radius: 8px;
+            padding: 11px 14px; font-family: var(--font); font-size: 15px; font-weight: 600;
+            color: var(--text); outline: none; transition: background 0.2s;
+        }
+        .number-input:focus { background: #2a2a2a; }
+        .setting-hint { font-size: 11px; color: #3a3a3a; margin-top: 5px; font-weight: 300; }
+
+        /* Segmented */
+        .segmented { display: flex; gap: 4px; background: #252525; border-radius: 8px; padding: 4px; }
+        .seg-btn {
+            flex: 1; background: transparent; border: none; color: #666;
+            padding: 8px 4px; font-family: var(--font); font-size: 12px;
+            font-weight: 600; letter-spacing: 1px; text-transform: uppercase;
+            cursor: pointer; border-radius: 5px; transition: all 0.2s;
+        }
+        .seg-btn.active { background: #555; color: #fff; }
+
+        /* Reference */
+        .ref-zone {
+            border: 1px dashed #222; border-radius: 8px; padding: 14px 16px;
+            display: flex; align-items: center; gap: 12px;
+            cursor: pointer; transition: border-color 0.2s; position: relative;
+        }
+        .ref-zone:hover { border-color: #444; }
+        .ref-zone input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+        .ref-label { font-size: 13px; color: var(--muted); font-weight: 300; }
+        .ref-status { font-size: 12px; color: #555; margin-left: auto; white-space: nowrap; }
+
+        .spec-bar { display: flex; gap: 20px; flex-wrap: wrap; margin-top: 12px; }
+        .spec-item { display: flex; flex-direction: column; gap: 2px; }
+        .spec-label { font-size: 10px; color: #3a3a3a; letter-spacing: 1px; text-transform: uppercase; }
+        .spec-value { font-size: 13px; color: #888; font-weight: 600; }
+
+        /* Buttons */
+        .btn {
+            background: #252525; color: var(--text); border: none; border-radius: 10px;
+            padding: 13px 24px; font-family: var(--font); font-size: 14px; font-weight: 600;
+            letter-spacing: 1px; cursor: pointer; transition: background 0.2s;
+        }
+        .btn:hover { background: #333; }
+        .btn:disabled { background: #1a1a1a; color: #3a3a3a; cursor: not-allowed; }
+
+        .btn-primary {
+            background: var(--text); color: #000; font-size: 15px; letter-spacing: 2px;
+            width: 100%; padding: 16px; border-radius: 12px; margin-bottom: 10px;
+        }
+        .btn-primary:hover:not(:disabled) { background: #ddd; }
+
+        .btn-download {
+            background: #1a1a1a; color: #444; font-size: 15px; letter-spacing: 2px;
+            width: 100%; padding: 16px; border-radius: 12px; transition: all 0.3s;
+            border: none; font-family: var(--font); font-weight: 600; cursor: not-allowed;
+        }
+        .btn-download.ready { background: #222; color: #fff; cursor: pointer; }
+        .btn-download.ready:hover { background: #333; }
+
+        /* Progress */
+        .progress-bar { background: #1a1a1a; border-radius: 6px; height: 4px; overflow: hidden; margin-top: 14px; }
+        .progress-fill { background: #fff; height: 100%; width: 0%; transition: width 0.3s ease; border-radius: 6px; }
+
+        /* Console */
+        .console {
+            background: #0a0a0a; border-radius: 10px; padding: 14px; height: 180px;
+            overflow-y: auto; font-family: var(--mono); font-size: 11.5px; line-height: 1.7; color: #555;
+        }
+        .console .log-info  { color: #666; }
+        .console .log-ok    { color: #aaa; font-weight: 600; }
+        .console .log-warn  { color: #888; font-style: italic; }
+        .console .log-error { color: #888; text-decoration: underline; }
+        .console .log-head  { color: #ccc; font-weight: bold; }
+    </style>
+</head>
+<body>
+<div class="container">
+
+    <div class="header">
+        <div class="title">GEBYRGAN</div>
+        <div class="subtitle">Beat mulcher for BRECAN Mk2</div>
+    </div>
+
+    <!-- Input -->
+    <div class="card">
+        <div class="card-title">INPUT AUDIO</div>
+        <div class="drop-zone" id="dropZone">
+            <input type="file" id="audioInput" accept="audio/*,.wav,.mp3,.aif,.aiff,.flac,.ogg,.m4a" multiple>
+            <div class="drop-icon">◈</div>
+            <div class="drop-label"><strong>Drop audio files here</strong> or click to browse</div>
+            <div class="drop-label" style="font-size:12px;margin-top:4px;color:#444;">WAV · MP3 · AIFF · FLAC · OGG · M4A — multiple files accepted</div>
+        </div>
+        <div class="file-list" id="fileList"></div>
+    </div>
+
+    <!-- Settings + Reference, side by side -->
+    <div class="card-row">
+        <div class="card">
+            <div class="setting-group" style="max-width:120px;">
+                <label>TARGET BPM</label>
+                <input type="number" id="bpmInput" class="number-input" value="180">
+                <div class="setting-hint" id="bpmHint">470400 smp = 8 bars</div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-title">LEVEL / EQ REFERENCE <span style="color:#2a2a2a;font-weight:300;letter-spacing:0">— optional</span></div>
+            <div class="ref-zone" id="refZone">
+                <input type="file" id="refInput" accept="audio/*,.wav,.aif,.aiff">
+                <div style="color:#555;font-size:20px">◎</div>
+                <div class="ref-label">Drop a reference WAV to match its level and spectral balance</div>
+                <div class="ref-status" id="refStatus">using Break1 profile</div>
+            </div>
+            <div class="spec-bar">
+                <div class="spec-item"><div class="spec-label">TARGET RMS</div><div class="spec-value" id="specRms">−15.3 dBFS</div></div>
+                <div class="spec-item"><div class="spec-label">TARGET PEAK</div><div class="spec-value" id="specPeak">−1.5 dBFS</div></div>
+                <div class="spec-item"><div class="spec-label">OUTPUT LEN</div><div class="spec-value" id="specOutputLen">470400 smp</div></div>
+                <div class="spec-item"><div class="spec-label">FORMAT</div><div class="spec-value">16-bit · 44.1k · MONO</div></div>
+                <div class="spec-item"><div class="spec-label">OUTPUTS</div><div class="spec-value">16 × WAV</div></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Actions & Progress -->
+    <div class="card">
+        <button class="btn btn-primary" id="processBtn" onclick="startProcessing()" disabled>RENDER 16 LOOPS</button>
+        <button class="btn btn-download" id="downloadBtn" onclick="downloadZip()">DOWNLOAD ZIP</button>
+        <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+    </div>
+
+    <!-- Log -->
+    <div class="card">
+        <div class="card-title">LOG</div>
+        <div class="console" id="consoleEl">Ready. Drop audio files to begin.<br></div>
+    </div>
+
+</div><!-- /container -->
+
+<script>
+'use strict';
+
+// ═══════════════════════════════════════════════════════════════════════════
+// CONSTANTS
+// ═══════════════════════════════════════════════════════════════════════════
+const TARGET_SR      = 44100;
+const NUM_LOOPS      = 16;
+const BARS_TOTAL     = 8;
+
+let TARGET_BPM       = 180;
+let BAR_SAMPLES      = Math.round(4 * (60 / TARGET_BPM) * TARGET_SR); // 58800 at 180 BPM
+let TARGET_SAMPLES   = BAR_SAMPLES * BARS_TOTAL; // 470400 at 180 BPM
+let EIGHTH_SAMPLES   = BAR_SAMPLES / 8; // 7350 smp at 180 BPM
+
+// Default level profile measured from Break1.wav
+const DEFAULT_PROFILE = {
+    rmsDb:  -15.27,
+    peakDb: -1.46
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════════════════════════════════
+let audioFiles   = [];
+let refProfile   = Object.assign({}, DEFAULT_PROFILE);
+let assemblyMode = 'shuffle';
+let hardQuantiseOn = true;
+let zipBlob      = null;
+
+const bpmInput = document.getElementById('bpmInput');
+const bpmHint = document.getElementById('bpmHint');
+const specOutputLen = document.getElementById('specOutputLen');
+
+bpmInput.addEventListener('input', () => {
+    let val = parseFloat(bpmInput.value);
+    if (isNaN(val) || val <= 0) return;
+    
+    TARGET_BPM = val;
+    BAR_SAMPLES = Math.round(4 * (60 / TARGET_BPM) * TARGET_SR);
+    TARGET_SAMPLES = BAR_SAMPLES * BARS_TOTAL;
+    EIGHTH_SAMPLES = BAR_SAMPLES / 8;
+    
+    bpmHint.textContent = `${TARGET_SAMPLES} smp = 8 bars`;
+    specOutputLen.textContent = `${TARGET_SAMPLES} smp`;
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// LOGGING
+// ═══════════════════════════════════════════════════════════════════════════
+function log(msg, cls = 'log-info') {
+    const el = document.getElementById('consoleEl');
+    el.innerHTML += `<span class="${cls}">${escHtml(msg)}</span>\n`;
+    el.scrollTop = el.scrollHeight;
+}
+function logHead(m) { log(m, 'log-head'); }
+function logOk(m)   { log(m, 'log-ok'); }
+function logWarn(m) { log(m, 'log-warn'); }
+function logErr(m)  { log(m, 'log-error'); }
+function escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// UI HELPERS
+// ═══════════════════════════════════════════════════════════════════════════
+function setProgress(pct) {
+    document.getElementById('progressFill').style.width = pct + '%';
+}
+
+function fmtBytes(b) {
+    if (b < 1024 * 1024) return (b / 1024).toFixed(0) + ' KB';
+    return (b / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// FILE HANDLING
+// ═══════════════════════════════════════════════════════════════════════════
+const dropZone  = document.getElementById('dropZone');
+const audioInput = document.getElementById('audioInput');
+
+dropZone.addEventListener('dragover',  e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+dropZone.addEventListener('dragleave', ()  => dropZone.classList.remove('drag-over'));
+dropZone.addEventListener('drop',      e  => {
+    e.preventDefault();
+    dropZone.classList.remove('drag-over');
+    addFiles([...e.dataTransfer.files]);
+});
+audioInput.addEventListener('change', () => { addFiles([...audioInput.files]); audioInput.value = ''; });
+
+function addFiles(newFiles) {
+    const audio = newFiles.filter(f =>
+        f.type.startsWith('audio/') ||
+        /\.(wav|mp3|aif|aiff|flac|ogg|m4a)$/i.test(f.name)
+    );
+    if (!audio.length) { logWarn('No recognised audio files.'); return; }
+    audioFiles = [...audioFiles, ...audio];
+    renderFileList();
+    document.getElementById('processBtn').disabled = false;
+    log(`Added ${audio.length} file(s) — total: ${audioFiles.length}`);
+}
+
+function removeFile(i) {
+    audioFiles.splice(i, 1);
+    renderFileList();
+    if (!audioFiles.length) document.getElementById('processBtn').disabled = true;
+}
+
+function renderFileList() {
+    const list = document.getElementById('fileList');
+    list.innerHTML = '';
+    audioFiles.forEach((f, i) => {
+        const item = document.createElement('div');
+        item.className = 'file-item';
+        item.innerHTML =
+            `<span class="file-name">${escHtml(f.name)}</span>` +
+            `<span class="file-size">${fmtBytes(f.size)}</span>` +
+            `<button class="remove-btn" onclick="removeFile(${i})">×</button>`;
+        list.appendChild(item);
+    });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// REFERENCE FILE ANALYSIS
+// ═══════════════════════════════════════════════════════════════════════════
+document.getElementById('refInput').addEventListener('change', async function () {
+    if (!this.files[0]) return;
+    const f = this.files[0];
+    document.getElementById('refStatus').textContent = '↻ analysing…';
+    try {
+        const mono = await decodeToMono(f);
+        refProfile = analyseProfile(mono);
+        document.getElementById('specRms').textContent  = refProfile.rmsDb.toFixed(1)  + ' dBFS';
+        document.getElementById('specPeak').textContent = refProfile.peakDb.toFixed(1) + ' dBFS';
+        document.getElementById('refStatus').textContent = '✓ ' + f.name;
+        logOk(`Reference: RMS ${refProfile.rmsDb.toFixed(1)} dBFS, Peak ${refProfile.peakDb.toFixed(1)} dBFS`);
+    } catch (e) {
+        document.getElementById('refStatus').textContent = '✗ error';
+        logErr('Reference failed: ' + e.message);
+    }
+    this.value = '';
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// AUDIO DECODE → mono Float32Array @ 44100 Hz
+// ═══════════════════════════════════════════════════════════════════════════
+async function decodeToMono(file) {
+    const arrayBuf = await file.arrayBuffer();
+    const tmpCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const decoded = await tmpCtx.decodeAudioData(arrayBuf);
+    tmpCtx.close();
+
+    const outLen = Math.ceil(decoded.duration * TARGET_SR);
+    const offCtx = new OfflineAudioContext(1, outLen, TARGET_SR);
+    const src    = offCtx.createBufferSource();
+    src.buffer   = decoded;
+    src.connect(offCtx.destination);
+    src.start(0);
+    const rendered = await offCtx.startRendering();
+    return rendered.getChannelData(0).slice();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// LEVEL / SPECTRAL PROFILE
+// ═══════════════════════════════════════════════════════════════════════════
+function analyseProfile(samples) {
+    let sumSq = 0, peak = 0;
+    for (let i = 0; i < samples.length; i++) {
+        const s = Math.abs(samples[i]);
+        sumSq += samples[i] * samples[i];
+        if (s > peak) peak = s;
+    }
+    const rms = Math.sqrt(sumSq / samples.length) || 1e-9;
+    const rmsDb  = 20 * Math.log10(rms);
+    const peakDb = 20 * Math.log10(peak || 1e-9);
+    return { rmsDb, peakDb, rmsLinear: rms, peakLinear: peak };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ASSESS & TRIM
+// ═══════════════════════════════════════════════════════════════════════════
+function trimSilence(samples, headThresh = 0.02, tailThresh = 0.003) {
+    let peak = 0;
+    for (let i = 0; i < samples.length; i++) {
+        const a = Math.abs(samples[i]);
+        if (a > peak) peak = a;
+    }
+    const headT = peak * headThresh;
+    const tailT = peak * tailThresh;
+    let start = 0, end = samples.length;
+    while (start < end && Math.abs(samples[start]) < headT) start++;
+    while (end > start && Math.abs(samples[end - 1]) < tailT) end--;
+    const pad = Math.round(0.005 * TARGET_SR); // keep 5ms head/tail room
+    start = Math.max(0, start - pad);
+    end   = Math.min(samples.length, end + pad);
+    return samples.subarray(start, end);
+}
+
+function guessBarsAndClamp(samples) {
+    const dur = samples.length / TARGET_SR;
+    let bars = 1;
+    if (dur > 8.0) bars = 8;
+    else if (dur > 4.0) bars = 4;
+    else if (dur > 2.0) bars = 2;
+
+    const maxDur = bars * 4 * (60 / 60);
+    let trimmed = samples;
+    if (dur > maxDur) {
+        trimmed = samples.subarray(0, Math.round(maxDur * TARGET_SR));
+    }
+    return { trimmed, bars };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// RESAMPLE
+// ═══════════════════════════════════════════════════════════════════════════
+function resampleAudio(src, targetLength) {
+    const out = new Float32Array(targetLength);
+    const ratio = src.length / targetLength;
+    for (let i = 0; i < targetLength; i++) {
+        const pos = i * ratio;
+        const idx = Math.floor(pos);
+        const frac = pos - idx;
+        if (idx + 1 < src.length) {
+            out[i] = src[idx] + frac * (src[idx + 1] - src[idx]);
+        } else {
+            out[i] = src[idx];
+        }
+    }
+    return out;
+}
+
+function stretchToBars(samples, bars) {
+    const targetLen = bars * BAR_SAMPLES;
+    return resampleAudio(samples, targetLen);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// CLICK REMOVAL
+// ═══════════════════════════════════════════════════════════════════════════
+function applyLoopFades(samples, fadeMs) {
+    const fadeSmp = Math.min(
+        Math.round((fadeMs / 1000) * TARGET_SR),
+        Math.floor(samples.length / 6)
+    );
+    for (let i = 0; i < fadeSmp; i++) {
+        const w = 0.5 * (1 - Math.cos(Math.PI * i / fadeSmp));
+        samples[i] *= w;
+    }
+    for (let i = 0; i < fadeSmp; i++) {
+        const w = 0.5 * (1 - Math.cos(Math.PI * (fadeSmp - 1 - i) / fadeSmp));
+        samples[samples.length - fadeSmp + i] *= w;
+    }
+    return samples;
+}
+
+function tileToTarget(unit, fadeMs) {
+    const faded = applyLoopFades(unit.slice(), fadeMs);
+    const out = new Float32Array(TARGET_SAMPLES);
+    let pos = 0;
+    while (pos < TARGET_SAMPLES) {
+        out.set(faded, pos);
+        pos += faded.length;
+    }
+    return out;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// HARD QUANTISER
+// ═══════════════════════════════════════════════════════════════════════════
+function refineOnset(audio, approxPos) {
+    const searchBack = 300, searchFwd = 700;
+    const lo = Math.max(0, approxPos - searchBack);
+    const hi = Math.min(audio.length - 1, approxPos + searchFwd);
+    let localPeak = 0;
+    for (let i = approxPos; i <= hi; i++) {
+        const a = Math.abs(audio[i]);
+        if (a > localPeak) localPeak = a;
+    }
+    const threshold = Math.max(localPeak * 0.05, 0.006);
+    for (let i = lo; i <= hi; i++) {
+        if (Math.abs(audio[i]) >= threshold) return i;
+    }
+    return approxPos;
+}
+
+function detectOnsets(audio, gridSamples, minGapRatio = 0.4) {
+    const hop = 128, win = 512;
+    const envelope = [];
+    for (let pos = 0; pos + win <= audio.length; pos += hop) {
+        let sum = 0;
+        for (let i = 0; i < win; i++) sum += audio[pos + i] * audio[pos + i];
+        envelope.push(Math.sqrt(sum / win));
+    }
+    const rise = envelope.map((e, i) => i > 0 ? Math.max(0, e - envelope[i - 1]) : 0);
+
+    const localWin = 30;
+    const minGapFrames = Math.max(1, Math.round((gridSamples * minGapRatio) / hop));
+    const onsets = [];
+    let lastFrame = -minGapFrames * 2;
+
+    for (let i = 0; i < rise.length; i++) {
+        const lo = Math.max(0, i - localWin), hi = Math.min(rise.length, i + localWin);
+        let avg = 0;
+        for (let k = lo; k < hi; k++) avg += rise[k];
+        avg /= (hi - lo);
+        const threshold = avg * 1.8 + 0.0015;
+        const isPeak = rise[i] > threshold &&
+                        rise[i] >= (rise[i - 1] || 0) &&
+                        rise[i] >= (rise[i + 1] || 0);
+        if (isPeak && (i - lastFrame) >= minGapFrames) {
+            onsets.push(refineOnset(audio, i * hop));
+            lastFrame = i;
+        }
+    }
+    return onsets;
+}
+
+function validateOnsets(onsets, gridSamples) {
+    if (!onsets.length) return onsets;
+    const minGap = gridSamples * 0.5;
+    const out = [onsets[0]];
+    for (let i = 1; i < onsets.length; i++) {
+        if (onsets[i] - out[out.length - 1] >= minGap) out.push(onsets[i]);
+    }
+    return out;
+}
+
+function hardQuantise(audio, gridSamples = EIGHTH_SAMPLES, fadeMs = 3) {
+    const raw = detectOnsets(audio, gridSamples, 0.08);
+    const onsets = validateOnsets(raw, gridSamples);
+    if (!onsets.length) return audio;
+
+    const grid = [];
+    const kept = [];
+    for (const o of onsets) {
+        const g = Math.round(Math.round(o / gridSamples) * gridSamples);
+        if (grid.length && g === grid[grid.length - 1]) continue;
+        grid.push(g);
+        kept.push(o);
+    }
+
+    const out = new Float32Array(audio.length);
+    // Adjusted parameters for spikier transients
+    const fadeInSmp  = Math.max(2, Math.round(0.0003 * TARGET_SR)); // Extremely short fade in (0.3ms) for instant attack
+    const fadeOutSmp = Math.max(8, Math.round((fadeMs / 1000) * TARGET_SR));
+    const doubleTriggerGuard = Math.round(gridSamples * 0.15);
+    const maxGapFillSmp = Math.round(0.15 * TARGET_SR);
+
+    const gatePulseSmp = Math.max(1, Math.round(gridSamples / 4));
+    const gateOnFrac = 0.55;
+    const gateOnSmp = Math.max(1, Math.round(gatePulseSmp * gateOnFrac));
+    const gateEdgeSmp = Math.min(Math.floor(gateOnSmp / 2), Math.round(0.005 * TARGET_SR));
+
+    // Increased punch length and gain for transients that cut through
+    const punchLenSmp = Math.max(4, Math.round(0.015 * TARGET_SR)); // 15ms transient emphasis
+    const punchGain = 2.4; // Significantly louder initial transient peak
+
+    if (grid[0] > 0) {
+        out.set(audio.subarray(0, Math.min(grid[0], audio.length)), 0);
+    }
+
+    for (let i = 0; i < kept.length; i++) {
+        const srcStart = kept[i];
+        const srcNaturalEnd = (i + 1 < kept.length) ? kept[i + 1] : audio.length;
+        const dstStart = grid[i];
+        const dstChoke = (i + 1 < grid.length) ? grid[i + 1] : audio.length;
+
+        let naturalEnd = srcNaturalEnd;
+        for (const r of raw) {
+            if (r <= srcStart + doubleTriggerGuard) continue;
+            if (r >= srcNaturalEnd) break;
+            naturalEnd = r;
+            break;
+        }
+
+        const available = Math.min(dstChoke - dstStart, audio.length - srcStart);
+        if (available <= 0) continue;
+        const realLen = Math.max(0, Math.min(naturalEnd - srcStart, available));
+
+        for (let j = 0; j < realLen; j++) out[dstStart + j] = audio[srcStart + j];
+
+        const fi = Math.min(fadeInSmp, Math.floor(realLen / 3));
+        for (let j = 0; j < fi; j++) out[dstStart + j] *= 0.5 * (1 - Math.cos(Math.PI * j / fi));
+
+        const pn = Math.min(punchLenSmp, realLen);
+        for (let j = 0; j < pn; j++) {
+            const w = 0.5 * (1 + Math.cos(Math.PI * j / pn));
+            // Using a squared curve (w * w) creates a sharper decay on the transient, making it sound punchier
+            const boost = 1 + (punchGain - 1) * (w * w); 
+            out[dstStart + j] *= boost;
+        }
+
+        const preFadeSmp = Math.min(Math.round(0.003 * TARGET_SR), Math.floor(realLen / 3));
+        for (let j = 0; j < preFadeSmp; j++) {
+            const w = 0.5 * (1 + Math.cos(Math.PI * j / preFadeSmp));
+            out[dstStart + realLen - preFadeSmp + j] *= w;
+        }
+
+        const gap = Math.min(available - realLen, maxGapFillSmp);
+        if (gap > 0) {
+            const tailSourceLen = Math.min(realLen, Math.max(0, Math.round(gap * 0.5)));
+            const closeFadeSmp = Math.min(gap, Math.round(0.005 * TARGET_SR));
+            const openFadeSmp = Math.min(gap, Math.round(0.003 * TARGET_SR));
+
+            if (tailSourceLen > Math.round(0.004 * TARGET_SR)) {
+                const tailStart = srcStart + realLen - tailSourceLen;
+                const tailMaterial = audio.subarray(tailStart, tailStart + tailSourceLen);
+                const stretched = resampleAudio(tailMaterial, gap);
+                for (let j = 0; j < gap; j++) {
+                    const taper = Math.pow(0.15, j / gap);
+                    const absPos = dstStart + realLen + j;
+                    const posInPulse = absPos % gatePulseSmp;
+                    let gateGain = 0;
+                    if (posInPulse < gateOnSmp) {
+                        if (posInPulse < gateEdgeSmp) gateGain = posInPulse / gateEdgeSmp;
+                        else if (posInPulse > gateOnSmp - gateEdgeSmp) gateGain = (gateOnSmp - posInPulse) / gateEdgeSmp;
+                        else gateGain = 1;
+                    }
+                    const close = j >= gap - closeFadeSmp ? (gap - j) / closeFadeSmp : 1;
+                    const open = j < openFadeSmp ? j / openFadeSmp : 1;
+                    out[dstStart + realLen + j] = stretched[j] * taper * gateGain * close * open;
+                }
+            } else {
+                for (let j = 0; j < gap; j++) {
+                    const g = Math.pow(0.001, j / gap);
+                    const close = j >= gap - closeFadeSmp ? (gap - j) / closeFadeSmp : 1;
+                    const open = j < openFadeSmp ? j / openFadeSmp : 1;
+                    out[dstStart + realLen + j] = audio[srcStart + realLen + j] * g * close * open;
+                }
+            }
+        } else {
+            const fo = Math.min(fadeOutSmp, Math.floor(realLen / 3));
+            for (let j = 0; j < fo; j++) out[dstStart + realLen - fo + j] *= 0.5 * (1 - Math.cos(Math.PI * (fo - j) / fo));
+        }
+    }
+
+    return out;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// LEVEL MATCHING
+// ═══════════════════════════════════════════════════════════════════════════
+function matchLevel(samples, targetRmsDb, targetPeakDb) {
+    const targetRms  = Math.pow(10, targetRmsDb  / 20);
+    const targetPeak = Math.pow(10, targetPeakDb / 20);
+
+    let sumSq = 0, peak = 0;
+    for (let i = 0; i < samples.length; i++) {
+        sumSq += samples[i] * samples[i];
+        if (Math.abs(samples[i]) > peak) peak = Math.abs(samples[i]);
+    }
+    const srcRms = Math.sqrt(sumSq / samples.length) || 1e-9;
+    if (srcRms < 1e-9 || peak < 1e-9) return samples;
+
+    let gain = targetRms / srcRms;
+    if (peak * gain > targetPeak) gain = targetPeak / peak;
+
+    const out = new Float32Array(samples.length);
+    for (let i = 0; i < samples.length; i++) out[i] = samples[i] * gain;
+    return out;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SOFT CLIP
+// ═══════════════════════════════════════════════════════════════════════════
+function softClip(samples) {
+    const out = new Float32Array(samples.length);
+    for (let i = 0; i < samples.length; i++) {
+        const s = samples[i];
+        out[i] = s > 1 ? 1 : s < -1 ? -1 : s;
+    }
+    return out;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// WAV ENCODER
+// ═══════════════════════════════════════════════════════════════════════════
+function encodeWav(samples) {
+    const dataBytes = samples.length * 2;
+    const buf  = new ArrayBuffer(44 + dataBytes);
+    const view = new DataView(buf);
+
+    const ws = (off, str) => { for (let i = 0; i < str.length; i++) view.setUint8(off + i, str.charCodeAt(i)); };
+
+    ws(0,  'RIFF');
+    view.setUint32(4,  36 + dataBytes, true);
+    ws(8,  'WAVE');
+    ws(12, 'fmt ');
+    view.setUint32(16, 16,          true);
+    view.setUint16(20, 1,           true);
+    view.setUint16(22, 1,           true);
+    view.setUint32(24, TARGET_SR,   true);
+    view.setUint32(28, TARGET_SR * 2, true);
+    view.setUint16(32, 2,           true);
+    view.setUint16(34, 16,          true);
+    ws(36, 'data');
+    view.setUint32(40, dataBytes, true);
+
+    for (let i = 0; i < samples.length; i++) {
+        const s = Math.max(-1, Math.min(1, samples[i]));
+        view.setInt16(44 + i * 2, s < 0 ? Math.ceil(s * 32768) : Math.floor(s * 32767), true);
+    }
+    return new Uint8Array(buf);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ZIP BUILDER
+// ═══════════════════════════════════════════════════════════════════════════
+class ZipBuilder {
+    constructor() { this.entries = []; this.cdEntries = []; this.offset = 0; }
+
+    addFile(name, data) {
+        const nameBytes = new TextEncoder().encode(name);
+        const now = new Date();
+        const dosDate = ((now.getFullYear() - 1980) << 9) | ((now.getMonth() + 1) << 5) | now.getDate();
+        const dosTime = (now.getHours() << 11) | (now.getMinutes() << 5) | (now.getSeconds() >> 1);
+        const crc = crc32(data);
+
+        const lh = new Uint8Array(30 + nameBytes.length);
+        const lhv = new DataView(lh.buffer);
+        writeU32LE(lhv, 0,  0x04034b50);
+        writeU16LE(lhv, 4,  20);
+        writeU16LE(lhv, 6,  0);
+        writeU16LE(lhv, 8,  0);
+        writeU16LE(lhv, 10, dosTime);
+        writeU16LE(lhv, 12, dosDate);
+        writeU32LE(lhv, 14, crc);
+        writeU32LE(lhv, 18, data.length);
+        writeU32LE(lhv, 22, data.length);
+        writeU16LE(lhv, 26, nameBytes.length);
+        writeU16LE(lhv, 28, 0);
+        lh.set(nameBytes, 30);
+
+        const localOffset = this.offset;
+        const entryBytes  = catU8(lh, data);
+        this.entries.push(entryBytes);
+        this.offset += entryBytes.length;
+
+        const cd = new Uint8Array(46 + nameBytes.length);
+        const cdv = new DataView(cd.buffer);
+        writeU32LE(cdv, 0,  0x02014b50);
+        writeU16LE(cdv, 4,  20);
+        writeU16LE(cdv, 6,  20);
+        writeU16LE(cdv, 8,  0);
+        writeU16LE(cdv, 10, 0);
+        writeU16LE(cdv, 12, dosTime);
+        writeU16LE(cdv, 14, dosDate);
+        writeU32LE(cdv, 16, crc);
+        writeU32LE(cdv, 20, data.length);
+        writeU32LE(cdv, 24, data.length);
+        writeU16LE(cdv, 28, nameBytes.length);
+        writeU16LE(cdv, 30, 0);
+        writeU16LE(cdv, 32, 0);
+        writeU16LE(cdv, 34, 0);
+        writeU16LE(cdv, 36, 0);
+        writeU32LE(cdv, 38, 0x20);
+        writeU32LE(cdv, 42, localOffset);
+        cd.set(nameBytes, 46);
+        this.cdEntries.push(cd);
+    }
+
+    build() {
+        const allEntries = catU8(...this.entries);
+        const cd         = catU8(...this.cdEntries);
+        const eocd       = new Uint8Array(22);
+        const eocdv      = new DataView(eocd.buffer);
+        writeU32LE(eocdv, 0,  0x06054b50);
+        writeU16LE(eocdv, 4,  0);
+        writeU16LE(eocdv, 6,  0);
+        writeU16LE(eocdv, 8,  this.cdEntries.length);
+        writeU16LE(eocdv, 10, this.cdEntries.length);
+        writeU32LE(eocdv, 12, cd.length);
+        writeU32LE(eocdv, 16, allEntries.length);
+        writeU16LE(eocdv, 20, 0);
+        return catU8(allEntries, cd, eocd);
+    }
+}
+
+function writeU32LE(dv, off, v) { dv.setUint32(off, v >>> 0, true); }
+function writeU16LE(dv, off, v) { dv.setUint16(off, v & 0xFFFF, true); }
+
+function catU8(...arrays) {
+    const arrays2 = arrays.filter(a => a && a.length);
+    const total = arrays2.reduce((s, a) => s + a.length, 0);
+    const out = new Uint8Array(total);
+    let p = 0;
+    for (const a of arrays2) { out.set(a, p); p += a.length; }
+    return out;
+}
+
+function crc32(data) {
+    let crc = 0xFFFFFFFF;
+    for (let i = 0; i < data.length; i++) {
+        crc ^= data[i];
+        for (let j = 0; j < 8; j++) crc = (crc >>> 1) ^ (crc & 1 ? 0xEDB88320 : 0);
+    }
+    return (crc ^ 0xFFFFFFFF) >>> 0;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PER-FILE PIPELINE
+// ═══════════════════════════════════════════════════════════════════════════
+async function buildLoopFromFile(file, fadeMs) {
+    const mono = await decodeToMono(file);
+    const silenceTrimmed = trimSilence(mono);
+    const { trimmed, bars } = guessBarsAndClamp(silenceTrimmed);
+    const stretched = stretchToBars(trimmed, bars);
+    const tiled = tileToTarget(stretched, fadeMs);
+    const quantised = hardQuantiseOn ? hardQuantise(tiled, EIGHTH_SAMPLES, Math.min(fadeMs, 4)) : tiled;
+    const levelled = matchLevel(quantised, refProfile.rmsDb, refProfile.peakDb);
+    const clipped = softClip(levelled);
+    return { audio: clipped, bars, sourceDur: (mono.length / TARGET_SR) };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// MAIN PROCESSING PIPELINE
+// ═══════════════════════════════════════════════════════════════════════════
+async function startProcessing() {
+    if (!audioFiles.length) return;
+
+    document.getElementById('processBtn').disabled = true;
+    document.getElementById('downloadBtn').className = 'btn btn-download';
+    document.getElementById('downloadBtn').disabled = true;
+    document.getElementById('consoleEl').innerHTML = '';
+    zipBlob = null;
+    setProgress(0);
+
+    const fadeMs = 8; 
+
+    logHead('GEBYRGAN — RENDER START');
+    log(`Target tempo ${TARGET_BPM} BPM · ${BARS_TOTAL} bars/loop · fade ${fadeMs} ms · ${audioFiles.length} source file(s)`);
+    log(`Output: ${NUM_LOOPS} × ${TARGET_SAMPLES} smp (${(TARGET_SAMPLES / TARGET_SR).toFixed(3)}s) @ ${TARGET_SR}Hz 16-bit mono`);
+
+    const filesToUse = audioFiles.slice(0, NUM_LOOPS);
+    if (audioFiles.length > NUM_LOOPS) {
+        logWarn(`${audioFiles.length} files uploaded — only the first ${NUM_LOOPS} fill direct slots.`);
+    }
+
+    const zip = new ZipBuilder();
+    const completedLoops = [];
+
+    log('Assessing and conforming source files…');
+    for (let i = 0; i < filesToUse.length; i++) {
+        await sleep(0);
+        try {
+            const { audio, bars, sourceDur } = await buildLoopFromFile(filesToUse[i], fadeMs);
+            zip.addFile(`Break${i + 1}.wav`, encodeWav(audio));
+            completedLoops.push(audio);
+            log(`  [${String(i + 1).padStart(2, '0')}] ${filesToUse[i].name} — ${sourceDur.toFixed(2)}s trimmed to ${bars} bar(s), stretched to ${TARGET_BPM} BPM`);
+        } catch (e) {
+            logErr(`  ✗ ${filesToUse[i].name}: ${e.message}`);
+        }
+        setProgress(((i + 1) / NUM_LOOPS) * 55);
+    }
+
+    const VARIATION_TIERS = [
+        { label: 'bar chunks',         divPerBar: 1 },
+        { label: 'quarter-bar chunks', divPerBar: 4 },
+        { label: '8th-note chunks',    divPerBar: 8 }
+    ];
+
+    const validLoops = completedLoops.filter(Boolean);
+    if (filesToUse.length < NUM_LOOPS) {
+        if (!validLoops.length) {
+            logErr('No loops available to build remaining slots from.');
+        } else {
+            const remainingCount = NUM_LOOPS - filesToUse.length;
+            log(`Building ${remainingCount} remaining slot(s) from ${validLoops.length} loop(s) across ${VARIATION_TIERS.length} variation tiers…`);
+
+            const poolCache = new Map();
+            function getSlicePool(divPerBar) {
+                if (poolCache.has(divPerBar)) return poolCache.get(divPerBar);
+                const slicesPerLoop = BARS_TOTAL * divPerBar;
+                const pool = [];
+                for (const loop of validLoops) {
+                    for (let s = 0; s < slicesPerLoop; s++) {
+                        const start = Math.round(s * (BAR_SAMPLES / divPerBar));
+                        const end = Math.round((s + 1) * (BAR_SAMPLES / divPerBar));
+                        pool.push(loop.subarray(start, end));
+                    }
+                }
+                poolCache.set(divPerBar, pool);
+                return pool;
+            }
+
+            let seqCursor = 0;
+            for (let i = filesToUse.length; i < NUM_LOOPS; i++) {
+                await sleep(0);
+                try {
+                    const j = i - filesToUse.length;
+                    const tierIdx = Math.min(
+                        VARIATION_TIERS.length - 1,
+                        Math.floor((j / remainingCount) * VARIATION_TIERS.length)
+                    );
+                    const tier = VARIATION_TIERS[tierIdx];
+                    const slicesNeeded = BARS_TOTAL * tier.divPerBar;
+                    const slicePool = getSlicePool(tier.divPerBar);
+
+                    const assembled = new Float32Array(TARGET_SAMPLES);
+                    for (let s = 0; s < slicesNeeded; s++) {
+                        let slice;
+                        if (assemblyMode === 'sequential') {
+                            slice = slicePool[seqCursor % slicePool.length];
+                            seqCursor++;
+                        } else {
+                            slice = slicePool[Math.floor(Math.random() * slicePool.length)];
+                        }
+                        const faded = applyLoopFades(slice.slice(), fadeMs);
+                        const start = Math.round(s * (BAR_SAMPLES / tier.divPerBar));
+                        assembled.set(faded, start);
+                    }
+                    const quantised = hardQuantiseOn ? hardQuantise(assembled, EIGHTH_SAMPLES, Math.min(fadeMs, 4)) : assembled;
+                    const levelled = matchLevel(quantised, refProfile.rmsDb, refProfile.peakDb);
+                    const clipped = softClip(levelled);
+                    zip.addFile(`Break${i + 1}.wav`, encodeWav(clipped));
+                    log(`  [${String(i + 1).padStart(2, '0')}] Random assembly — ${tier.label} (${slicesNeeded} slices, ${assemblyMode}${hardQuantiseOn ? ', quantised' : ''})`);
+                } catch (e) {
+                    logErr(`  ✗ Slot ${i + 1}: ${e.message}`);
+                }
+                setProgress(55 + ((i - filesToUse.length + 1) / remainingCount) * 40);
+            }
+        }
+    }
+
+    log('Building ZIP…');
+    const zipBytes = zip.build();
+    zipBlob = new Blob([zipBytes], { type: 'application/zip' });
+    setProgress(100);
+
+    logOk(`Done — ${NUM_LOOPS} loops, ${fmtBytes(zipBytes.length)} ZIP ready`);
+
+    const dlBtn = document.getElementById('downloadBtn');
+    dlBtn.className = 'btn btn-download ready';
+    dlBtn.disabled  = false;
+    dlBtn.textContent = `↓  DOWNLOAD ZIP  (${fmtBytes(zipBytes.length)})`;
+    document.getElementById('processBtn').disabled = false;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// DOWNLOAD
+// ═══════════════════════════════════════════════════════════════════════════
+function downloadZip() {
+    if (!zipBlob) return;
+    const url = URL.createObjectURL(zipBlob);
+    const a   = document.createElement('a');
+    a.href     = url;
+    a.download = 'gebyrgan_loops.zip';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+</script>
+</body>
+</html>
