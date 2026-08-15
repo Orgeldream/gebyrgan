@@ -1,4 +1,4 @@
-GEBYRGAN - A beat mulcher for BRECAN Mk2 but it’s also its own thing.
+GEBYRGAN - A beat mulcher for BRECAN Mk2, but it’s also its own thing.
 
 Feed it audio and get weird blippy breaks compatible with BRECAN mk2.
 
